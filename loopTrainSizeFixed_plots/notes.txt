@@ -1,0 +1,14 @@
+I run a simple linear regression model on the numeric features.
+
+The point of the experiment is: How does the error (RMSE) change based on train-test size?
+=> Observed that error varies even for a given test-train ratio.
+
+New point of the experiment: How does the error change when the random split of train-test is repeated (for same train-test ratio)?
+=> These are the histograms of error, for a given test_size (10 to 80). 
+
+? Why 3 lobes of the distribution (especially 10,20,30) ?
+? Why high errors, but also narrowing of the distribution at low errors, when test size increase ?
+
+? What does all this mean ?
+
+- Is it something to do with excluded features? Some samples have high error because of excluded but important features. The subsets form those lobes ???
