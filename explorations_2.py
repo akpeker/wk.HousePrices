@@ -23,6 +23,8 @@ from sklearn import tree
 from xgboost import XGBRegressor
 
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import ShuffleSplit
 from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -78,7 +80,7 @@ def tryLinearRegression(X_train, X_test, y_train, y_test):
     '''
     Initial simple exploration on the problem using LinearRegression.
     Test LinearRegression on given train and test (validation) data:
-    Print performance metrics R^2 and mean squared error.
+    Print performance metrics R^2 and root mean squared error (RMSE).
     Plot (scatter) predictions vs. actual y_test.
     '''
     lr = linear_model.LinearRegression()
@@ -86,7 +88,7 @@ def tryLinearRegression(X_train, X_test, y_train, y_test):
     print ("R^2 is: \n", model.score(X_test, y_test))
     
     predictions = model.predict(X_test)
-    print ('MSE is: \n', mean_squared_error(y_test, predictions))
+    print ('RMSE is: \n', np.sqrt(mean_squared_error(y_test, predictions)))
     
     plt.scatter(predictions, y_test, alpha=.7, color='b') #alpha helps to show overlapping data
     plt.xlabel('Predicted Price')
@@ -99,12 +101,12 @@ def loopTrainSize():
     '''
     Explore effect of train/test size on model error.
     Loop thru a range of test size percentages, 
-    print and plot how MSE error changes wrt test size,
+    print and plot how RMSE error changes wrt test size,
     using LinearRegression, and numeric X,y.
     '''
     X, y = getNumericXy()
     r2list = []
-    mselist = []
+    rmselist = []
     for tsize in range(10,80,5):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=tsize/100.0)
         lr = linear_model.LinearRegression()
@@ -112,15 +114,39 @@ def loopTrainSize():
         r2 = model.score(X_test, y_test)
         r2list.append(r2)
         predictions = model.predict(X_test)
-        mse = mean_squared_error(y_test, predictions)
-        mselist.append(mse)
-        print("TestSize=%3d\tr2=%.4f\trmse=%.4f" % (tsize,r2,mse))
+        rmse = np.sqrt(mean_squared_error(y_test, predictions))
+        rmselist.append(rmse)
+        print("TestSize=%3d\tr2=%.4f\trmse=%.4f" % (tsize,r2,rmse))
         
-    plt.plot(range(10,80,5),mselist)
-    plt.title("MSE vs. test size")
+    plt.plot(range(10,80,5),rmselist)
+    plt.title("RMSE vs. test size")
     plt.figure()
     plt.plot(range(10,80,5),r2list)
     plt.title("R^2 vs. test size")
+#-----------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------
+def loopTrainSizeCV():
+    '''
+    Similar to loopTrainSize() function, but uses cross_validation_score, because
+    a single error figure turned out to be not reliable.
+    
+    You can see that the error gets higher as training size gets smaller (test size increases).
+    '''
+    X, y = getNumericXy()
+    r2list = []
+    rmselist = []
+    for tsize in range(10,80,5):
+        lr = linear_model.LinearRegression()
+        shuffle_cv = ShuffleSplit(n_splits=100,test_size=tsize/100.0)
+        rmse_scores = np.sqrt(-1.0*cross_val_score(lr, X, y, 
+                                            cv=shuffle_cv, 
+                                            scoring="neg_mean_squared_error"))
+        rmselist.append(rmse_scores.mean())
+        print("TestSize=%3d\trmse=%.4f" % (tsize,rmse_scores.mean()))
+        
+    plt.plot(range(10,80,5),rmselist)
+    plt.title("RMSE vs. test size")
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
@@ -140,7 +166,7 @@ def loopTrainSizeFixed(tsize = 10, rep=300):
     '''
     X, y = getNumericXy()
     r2list = []
-    mselist = []
+    rmselist = []
     for r in range(rep):
         if r%10==0: print(r,end=",")
         if r%100==0: print()
@@ -150,16 +176,16 @@ def loopTrainSizeFixed(tsize = 10, rep=300):
         r2 = model.score(X_test, y_test)
         r2list.append(r2)
         predictions = model.predict(X_test)
-        mse = mean_squared_error(y_test, predictions)
-        mselist.append(mse)
+        rmse = np.sqrt(mean_squared_error(y_test, predictions))
+        rmselist.append(rmse)
     #plt.plot(range(rep),rmselist,"o--")
     plt.figure()
-    plt.hist(mselist,max(int(np.sqrt(rep)*1.5),10))
+    plt.hist(rmselist,max(int(np.sqrt(rep)*1.5),10))
     plt.title("Test size = %d%%. Rep = %d" % (tsize,rep))
     plt.figure()
-    sns.distplot(mselist)
+    sns.distplot(rmselist)
     plt.title("Test size = %d%%. Rep = %d" % (tsize,rep))
-    return mselist
+    return rmselist
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
@@ -173,26 +199,38 @@ def loopTrainSizeFixedMdl(mdl, tsize = 20, rep=300):
     Similar to loopTrainSizeFixed(), but model is passed as a parameter.
     '''
     X, y = getNumericXy()
-    mselist = []
+    rmselist = []
     for r in range(rep):
         print(r,end=",")
         if r%30==0:print()
         X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=tsize/100.0)
         model = mdl.fit(X_train, y_train)
         predictions = model.predict(X_test)
-        mse = mean_squared_error(y_test, predictions)
-        mselist.append(mse)
+        rmse = np.sqrt(mean_squared_error(y_test, predictions))
+        rmselist.append(rmse)
     print(model)
     #plt.plot(range(rep),rmselist,"o--")
     plt.figure()
     #plt.hist(rmselist,max(int(np.sqrt(rep)*1.5),10))
-    sns.distplot(mselist)
+    sns.distplot(rmselist)
     plt.title("Test size = %d%%. Rep = %d" % (tsize,rep))
-    return mselist
+    return rmselist
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
 def loopModels(tsize=30,rep=300):
+    '''
+    Loop through a number of predefined regression modelds and report their performance.
+    Use numeric X,y.
+    Print mean and median RMSE for each model. 
+    Plot the distribution of RMSE for each model.
+    Return a dictionary of: {"model name" : RMSE list} that includes all models.
+    This dictionary can easily be converted to pd.DataFrame and saved as csv.
+
+    Each model is run rep times, to obtain a distribution of RMSE instead of a single number.
+    Usually a single error calculation is done, or cross validation is used (e.g. with 5 fold),
+    but a distribution of errors from e.g. 300 runs gives interesting results, useful in exploration.
+    '''
     X, y = getNumericXy()
     
     # OverallQual is the feature with highest correlation with the target.
@@ -201,14 +239,13 @@ def loopModels(tsize=30,rep=300):
     #X = data[["OverallQual"]]
 
     models = {
-            "ARDRegression":linear_model.ARDRegression(),
+            #"ARDRegression":linear_model.ARDRegression(),
             "BayesianRidge":linear_model.BayesianRidge(),
             "ElasticNet":linear_model.ElasticNet(),
             "HuberRegressor":linear_model.HuberRegressor(),
             "Lars":linear_model.Lars(),
             "Lasso":linear_model.Lasso(),
             "LassoLars":linear_model.LassoLars(),
-            #"ElasticNet":linear_model.LogisticRegression(),
             "RANSACRegressor":linear_model.RANSACRegressor(),
             "DecisionTree":tree.DecisionTreeRegressor(),
             "RandomForest20":ensemble.RandomForestRegressor(n_estimators=20),
@@ -225,8 +262,9 @@ def loopModels(tsize=30,rep=300):
             X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=tsize/100.0)
             model = mdl.fit(X_train, y_train)
             predictions = model.predict(X_test)
-            rmse = mean_squared_error(y_test, predictions)
+            rmse = np.sqrt(mean_squared_error(y_test, predictions))
             rmselist.append(rmse)
+        print("\tMean RMSE = %f, Median RMSE = %f" % (np.mean(rmselist), np.median(rmselist)) )
         models_rmselist[mname] = rmselist
         plt.figure()
         plt.hist(rmselist,max(int(np.sqrt(rep)*1.5),10))
@@ -234,8 +272,15 @@ def loopModels(tsize=30,rep=300):
         plt.title("%s mn=%.4f,md=%.4f (tsize=%d,rep=%d)"%
                   (mname,np.mean(rmselist),np.median(rmselist),tsize,rep))
     return models_rmselist
+#-----------------------------------------------------------------------------
         
+#-----------------------------------------------------------------------------
 def Submission(model, fname = "submission.csv"):
+    '''
+    Generate Kaggle submission using the given model, and the test data.
+    Use only the numeric features.
+    Save the csv file, with the given file name.
+    '''
     tt = test.select_dtypes(include=[np.number]).interpolate()
     predlog = model.predict(tt)
     pred = np.exp(predlog)
@@ -243,19 +288,30 @@ def Submission(model, fname = "submission.csv"):
     sub["Id"] = test.Id
     sub['SalePrice'] = pred
     sub.to_csv(fname, index=False)
+#-----------------------------------------------------------------------------
     
+#-----------------------------------------------------------------------------
 def KNearestNCA():
+    '''
+    Test the nearest neighbor regressor.
+    Separate function, to play with NCA.
+    '''
     nca = neighbors.NeighborhoodComponentsAnalysis(random_state=42)
     knn = neighbors.KNeighborsRegressor()
     nca_pipe = Pipeline([('nca', nca), ('knn', knn)])
     #nca_pipe.fit(X_train, y_train) 
     rmselist = loopTrainSizeFixedMdl(nca_pipe, tsize = 30, rep=1000)
+#-----------------------------------------------------------------------------
 
+#-----------------------------------------------------------------------------
 def MLPReg(tsize=30,rep=500):
-    data = train.select_dtypes(include=[np.number]).interpolate().dropna()
-    y = data.logSP
-    X = data.drop(["logSP","SalePrice"],axis=1)
-
+    '''
+    Test the MLP (multi-layer perceptron) regressor.
+    Use standard scaling of features.
+    MLP is said to be sensitive to scaling,
+    so this is a separate function for testing MLP with feature scaling.
+    '''
+    X, y = getNumericXy()
     Xs = StandardScaler().fit_transform(X)
     rmselist = []
     for r in range(rep):
@@ -265,18 +321,22 @@ def MLPReg(tsize=30,rep=500):
         mdl = neural_network.MLPRegressor(max_iter=1000)
         model = mdl.fit(X_train, y_train)
         predictions = model.predict(X_test)
-        rmse = mean_squared_error(y_test, predictions)
+        rmse = np.sqrt(mean_squared_error(y_test, predictions))
         rmselist.append(rmse)
     plt.figure()
     #plt.hist(rmselist,max(int(np.sqrt(rep)*1.5),10))
     sns.distplot(rmselist)
     return rmselist
+#-----------------------------------------------------------------------------
 
+#-----------------------------------------------------------------------------
 def RandForestReg(tsize=30,rep=500,n=100):
-    data = train.select_dtypes(include=[np.number]).interpolate().dropna()
-    y = data.logSP
-    X = data.drop(["logSP","SalePrice"],axis=1)
-
+    '''
+    Test the nearest neighbor regressor.
+    Separate function, to play with StandardScaler, 
+    verify that scaling is not important for decision trees.
+    '''
+    X, y = getNumericXy()
     #Xs = StandardScaler().fit_transform(X)
     rmselist = []
     for r in range(rep):
@@ -287,19 +347,23 @@ def RandForestReg(tsize=30,rep=500,n=100):
         mdl = ensemble.RandomForestRegressor(n_estimators=n)
         model = mdl.fit(X_train, y_train)
         predictions = model.predict(X_test)
-        rmse = mean_squared_error(y_test, predictions)
+        rmse = np.sqrt(mean_squared_error(y_test, predictions))
         rmselist.append(rmse)
     plt.figure()
     #plt.hist(rmselist,max(int(np.sqrt(rep)*1.5),10))
     sns.distplot(rmselist)
     plt.title("RandomForest")
     return rmselist
+#-----------------------------------------------------------------------------
 
+#-----------------------------------------------------------------------------
 def loopNumericFeatures(tsize=30,rep=100):
-    data = train.select_dtypes(include=[np.number]).interpolate().dropna()
-    y = data.logSP
-    X = data.drop(["logSP","SalePrice"],axis=1)
-    
+    '''
+    Test the error rate achieved by each numeric feature by itself.
+    Plot the distribution of RMSE.
+    Use BayesianRidge, wchich gave the best result with numeric features.
+    '''
+    X, y = getNumericXy()
     for feat in X.columns:
         rmselist = []
         for r in range(rep):
@@ -309,14 +373,22 @@ def loopNumericFeatures(tsize=30,rep=100):
             mdl = linear_model.BayesianRidge()
             model = mdl.fit(X_train, y_train)
             predictions = model.predict(X_test)
-            rmse = mean_squared_error(y_test, predictions)
+            rmse = np.sqrt(mean_squared_error(y_test, predictions))
             rmselist.append(rmse)
         plt.figure()
         #plt.hist(rmselist,max(int(np.sqrt(rep)*1.5),10))
         sns.distplot(rmselist)
         plt.title(feat)
+#-----------------------------------------------------------------------------
 
+#-----------------------------------------------------------------------------
 def loopFeaturesDT(tsize=30,rep=100):
+    '''
+    *** incomplete attempt playing with categorical features ***
+    Test the error rate achieved by each feature (numeric AND categorical) by itself.
+    Use decision tree, assuming it would work well with categorical features as well.
+    Need to use LabelEncoder to handle string/object features. None's are still a problem.
+    '''
     #data = train.select_dtypes(include=[np.number]).interpolate().dropna()
     data = train.interpolate()
     y = data.logSP
