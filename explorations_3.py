@@ -81,15 +81,15 @@ def testModelsCV(X,y,models=None,cv=5):
 
     if models is None:
         models = {
-                "ARDRegression":linear_model.ARDRegression(),
+                #"ARDRegression":linear_model.ARDRegression(),
                 "BayesianRidge":linear_model.BayesianRidge(),
-                "ElasticNet":linear_model.ElasticNet(),
-                "HuberRegressor":linear_model.HuberRegressor(),
-                "Lars":linear_model.Lars(),
-                "Lasso":linear_model.Lasso(),
-                "LassoLars":linear_model.LassoLars(),
-                "RANSACRegressor":linear_model.RANSACRegressor(),
-                "DecisionTree":tree.DecisionTreeRegressor(),
+                #"ElasticNet":linear_model.ElasticNet(),
+                #"HuberRegressor":linear_model.HuberRegressor(),
+                #"Lars":linear_model.Lars(),
+                #"Lasso":linear_model.Lasso(),
+                #"LassoLars":linear_model.LassoLars(),
+                #"RANSACRegressor":linear_model.RANSACRegressor(),
+                #"DecisionTree":tree.DecisionTreeRegressor(),
                 "RandomForest20":ensemble.RandomForestRegressor(n_estimators=50),
                 "RandomForest100":ensemble.RandomForestRegressor(n_estimators=150),
                 "RandomForest200":ensemble.RandomForestRegressor(n_estimators=300),
@@ -127,24 +127,34 @@ def exp1():
     df1 = pd.concat([df,df.describe()])
     df1.T.to_excel("rmse-scores_CV5_handlemissing-v1.xlsx")
     
-def submission1(model):
-    '''Submit the test results after exp1(). Test data is prepared according to exp1.'''
+def submission1(model=None,filename="submit_XGBR_missingv1_n500_r05.csv"):
+    '''
+    Submit the test results after exp1(). Test data is prepared according to exp1.
+    Made model a parameter so that the function can be used with other models.
+    model needs to be already fit.
+    '''
     train_v1 = handleMissing_v1()
     train_v2 = pd.get_dummies(train_v1)
     X,y = getXy(train_v2)
 
     X_test_v1 = test[train_v1.columns.drop(["logSP","SalePrice"])]
     X_test_v2 = pd.get_dummies(X_test_v1)
+    # some of the values in train don't appear in test, so some dummy columns are missing
+    add_cols = set(X.columns) - set(X_test_v2.columns)
+    for col in add_cols:
+        X_test_v2[col] = 0
 
-    model = XGBRegressor(n_estimators=1000, learning_rate=0.05)
-    model.fit(X,y)
-    predlog = model.predict(X_test_v2)
+    if model is None:
+        model = XGBRegressor(n_estimators=500, learning_rate=0.05)
+        #model = XGBRegressor(n_estimators=200, learning_rate=0.1)
+        model.fit(X,y)
+    predlog = model.predict(X_test_v2[X.columns]) # make sure columns are in the order they are in train
     pred = np.exp(predlog)
     
     sub = pd.DataFrame()
     sub["Id"] = test.Id
     sub['SalePrice'] = pred
-    sub.to_csv("submit_XGBR_n1000_r05.csv", index=False)
+    sub.to_csv(filename, index=False)
 
     
 #-----------------------------------------------------------------------------
@@ -182,16 +192,20 @@ def exp3():
     X,y = getXy(train_v2)
     
     models = {}
-    n_est_list = [10,30,100,150,200,250,300,400,500,750,1000]
+    #n_est_list = [10,30,100,150,200,250,300,400,500,750,1000]
+    n_est_list = [200,300,400,500,750,1000]
+    lrate_list = [0.001,0.01,0.05,0.1,0.25,0.5,1]
     for n in n_est_list:
-        models["XGBR_%d"%n] = ensemble.RandomForestRegressor(n_estimators=n)
+        for lrate in lrate_list:
+            models["XGBR_%d_%f"%(n,lrate)] = XGBRegressor(n_estimators=n,learning_rate=lrate)
     
     mscores = testModelsCV(X, y, models=models)
     df = pd.DataFrame(mscores)
     df1 = pd.concat([df,df.describe()])
-    df1.T.to_excel("rmse-scores_CV5_handlemissing-v1_XGBR_n10-1000.xlsx")
+    df1.T.to_excel("rmse-scores_CV5_handlemissing-v1_XGBR_n10-1000_lr.001-1.xlsx")
     
     # plot the change of error wrt n_estimators
+    # This section became problematic after adding lrate_list to optimization
     x = df.describe().T.drop(["count","std"],1)
     x.plot()
     plt.figure()
@@ -201,4 +215,4 @@ def exp3():
     plt.plot(n_est_list,df.describe().loc["50%",:])
     plt.title("Median of CV error")
     
-    
+    return df1
